@@ -14,7 +14,7 @@ Might need refactor later, was written by a Python novice under some time pressu
 class PythonExecutor:
     EXEC_COMPILATION_FAILURE_ERRORS = (SyntaxError, NameError, AttributeError, ImportError, IndentationError)
     EXEC_FILENAME = 'shibutzim.py'
-    PROCESS_OUTPUT_FILENAME = 'output.out'
+    PROCESS_OUTPUT_FILE_EXTENSION = '.out'
 
     @staticmethod
     def _get_exec_stack_trace(e: Exception) -> str:
@@ -47,36 +47,60 @@ class PythonExecutor:
             return False, PythonExecutor._get_exec_stack_trace(e)
 
     @staticmethod
-    def _change_stdout_and_check_code_validity(snippet: str, output_filename):
+    def _change_stdout_and_check_code_validity(snippet: str):
+        output_filename = str(os.getpid()) + PythonExecutor.PROCESS_OUTPUT_FILE_EXTENSION
+
         with open(output_filename, 'w') as output_file:
-            is_code_valid = PythonExecutor._is_code_valid(snippet)
+            is_code_valid, compilation_error = PythonExecutor._is_code_valid(snippet)
+
+            print(is_code_valid)
 
             print(is_code_valid, file=output_file)
+            if compilation_error:
+                print(compilation_error, file=output_file)
 
     @staticmethod
     def check_code_validity_in_subprocess(snippet: str):
         subprocess = multiprocessing.Process(target=PythonExecutor._change_stdout_and_check_code_validity,
-                                             args=(snippet, PythonExecutor.PROCESS_OUTPUT_FILENAME))
+                                             args=(snippet,))
         subprocess.start()
         subprocess.join()
 
-        with open(PythonExecutor.PROCESS_OUTPUT_FILENAME, 'r') as process_output_file:
-            return process_output_file.read()
+        process_output_filename = str(subprocess.pid) + PythonExecutor.PROCESS_OUTPUT_FILE_EXTENSION
+
+        with open(process_output_filename, 'r') as process_output_file:
+            is_file_valid = process_output_file.readline().strip() == 'True'
+            compilation_error = process_output_file.read().strip()
+
+        os.remove(process_output_filename)
+        
+        return is_file_valid, compilation_error
 
     @staticmethod
-    def _change_stdout_and_execute_code(snippet: str, output_filename):
+    def _change_stdout_and_execute_code(snippet: str):
+        output_filename = str(os.getpid()) + PythonExecutor.PROCESS_OUTPUT_FILE_EXTENSION
+
         with open(output_filename, 'w') as output_file:
             try:
+                sys.stdout = output_file
+                sys.stderr = output_file
+
                 PythonExecutor._execute_code_snippet(snippet)
             except Exception as e:
-                print(PythonExecutor._get_exec_stack_trace(e), file=sys.stderr)
+                print(PythonExecutor._get_exec_stack_trace(e), file=output_file)
 
     @staticmethod
     def execute_code_in_subprocess(snippet: str):
         subprocess = multiprocessing.Process(target=PythonExecutor._change_stdout_and_execute_code,
-                                             args=(snippet, PythonExecutor.PROCESS_OUTPUT_FILENAME))
+                                             args=(snippet,))
         subprocess.start()
         subprocess.join()
 
-        with open(PythonExecutor.PROCESS_OUTPUT_FILENAME, 'r') as process_output_file:
-            return process_output_file.read()
+        process_output_filename = str(subprocess.pid) + PythonExecutor.PROCESS_OUTPUT_FILE_EXTENSION
+
+        with open(process_output_filename, 'r') as process_output_file:
+            process_output = process_output_file.read()
+        
+        os.remove(process_output_filename)
+
+        return process_output
