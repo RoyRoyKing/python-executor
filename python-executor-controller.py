@@ -10,7 +10,7 @@ def compile_code():
 
     is_valid, compilation_error = PythonExecutor.check_code_validity_in_subprocess(code_snippet)
 
-    return jsonify({'is_valid': is_valid, 'error': compilation_error})
+    return jsonify({'isValid': is_valid, 'output': compilation_error})
 
 
 @app.route('/execute')
